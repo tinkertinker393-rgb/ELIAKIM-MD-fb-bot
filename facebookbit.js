@@ -1,76 +1,19 @@
 const puppeteer = require('puppeteer');
+require('dotenv').config();
 
-const email = 'eliakimrotich@gmail.com';
-const password = '8525itwt';
-const awayMessage = "Hello, I'm ELIAKIM's bot and he's not available now. He'll be here soon.";
+const email = process.env.FB_EMAIL || 'eliakimrotich@gmail.com';
+const password = process.env.FB_PASSWORD || '8525itwt';
+const COMMENT_TEXTS = [
+  "Nice post!",
+  "Great!",
+  "Thanks for sharing!",
+  "Interesting!"
+];
+const NUM_LIKES = 100;     // Change this for number of posts to like
+const NUM_COMMENTS = 100;  // Change this for number of posts to comment
 
-async function reactToPosts(page, type = 'LIKE', count = 100) {
-  // Types: LIKE, LOVE, HAHA, WOW, SAD, ANGRY
-  for (let i = 0; i < count; i++) {
-    try {
-      // Find post
-      const post = (await page.$$('div[role="article"]'))[i];
-      if (!post) continue;
-
-      // Hover on Like to show reactions
-      const likeBtn = await post.$('div[aria-label="Like"]');
-      if (!likeBtn) continue;
-      await likeBtn.hover();
-      await page.waitForTimeout(800);
-
-      // Click the react button
-      let reactBtn;
-      switch (type) {
-        case 'LOVE':
-          reactBtn = await page.$('div[aria-label="Love"]');
-          break;
-        case 'HAHA':
-          reactBtn = await page.$('div[aria-label="Haha"]');
-          break;
-        case 'WOW':
-          reactBtn = await page.$('div[aria-label="Wow"]');
-          break;
-        case 'SAD':
-          reactBtn = await page.$('div[aria-label="Sad"]');
-          break;
-        case 'ANGRY':
-          reactBtn = await page.$('div[aria-label="Angry"]');
-          break;
-        default:
-          reactBtn = likeBtn;
-      }
-      if (reactBtn) {
-        await reactBtn.click();
-        console.log(`Reacted with ${type} on post ${i + 1}`);
-      }
-      await page.waitForTimeout(1500);
-    } catch (err) {
-      console.error(`Error reacting to post ${i + 1}:`, err.message);
-    }
-  }
-}
-
-async function autoReplyMessages(page, awayMessage) {
-  try {
-    await page.goto('https://www.facebook.com/messages', { waitUntil: 'networkidle2' });
-    await page.waitForSelector('ul[role="listbox"]', { timeout: 15000 });
-
-    const chats = await page.$$('ul[role="listbox"] li');
-    for (let i = 0; i < Math.min(2, chats.length); i++) {
-      try {
-        await chats[i].click();
-        await page.waitForSelector('div[aria-label="Type a message..."]', { timeout: 7000 });
-        await page.type('div[aria-label="Type a message..."]', awayMessage);
-        await page.keyboard.press('Enter');
-        console.log(`Sent away message to chat ${i + 1}`);
-        await page.waitForTimeout(2000);
-      } catch (err) {
-        console.error(`Error replying to chat ${i + 1}:`, err.message);
-      }
-    }
-  } catch (err) {
-    console.error('Error in auto-reply messages:', err.message);
-  }
+function getRandomComment() {
+  return COMMENT_TEXTS[Math.floor(Math.random() * COMMENT_TEXTS.length)];
 }
 
 (async () => {
@@ -78,23 +21,80 @@ async function autoReplyMessages(page, awayMessage) {
   const page = await browser.newPage();
 
   try {
+    // Login
     await page.goto('https://www.facebook.com/', { waitUntil: 'networkidle2' });
-
-    // Log in
     await page.type('#email', email);
     await page.type('#pass', password);
     await Promise.all([
       page.click('button[name="login"]'),
-      page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 20000 }),
+      page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 30000 }),
     ]);
     console.log('Logged in.');
 
-    // Out React (LOVE react to first 3 posts)
+    // Wait for feed
     await page.waitForSelector('[role="feed"]', { timeout: 20000 });
-    await reactToPosts(page, 'LOVE', 3);
 
-    // Away Message (auto-reply to first 2 chats)
-    await autoReplyMessages(page, awayMessage);
+    // Scroll to load posts
+    for (let i = 0; i < 3; i++) {
+      await page.evaluate(() => window.scrollBy(0, window.innerHeight));
+      await page.waitForTimeout(2000);
+    }
+
+    // Like unliked posts
+    let liked = 0;
+    const likeSelectors = [
+      'div[aria-label="Like"][role="button"]',
+      'span[aria-label="Like"]',
+      'button[aria-label="Like"]'
+    ];
+    let likeButtons = [];
+    for (const sel of likeSelectors) {
+      likeButtons = await page.$$(sel);
+      if (likeButtons.length > 0) break;
+    }
+    console.log(`Found ${likeButtons.length} Like buttons`);
+
+    for (let i = 0; i < likeButtons.length && liked < NUM_LIKES; i++) {
+      try {
+        // Check if not already liked
+        const label = await likeButtons[i].evaluate(el => el.getAttribute('aria-label'));
+        if (label === "Like") {
+          await likeButtons[i].click();
+          liked++;
+          console.log(`Liked post ${liked}`);
+          await page.waitForTimeout(1200);
+        }
+      } catch (err) {
+        console.error(`Error liking post ${i + 1}:`, err.message);
+      }
+    }
+
+    // Comment on posts
+    let commented = 0;
+    const commentSelectors = [
+      'div[aria-label="Write a comment"]',
+      'input[aria-label="Write a comment"]'
+    ];
+    let commentAreas = [];
+    for (const sel of commentSelectors) {
+      commentAreas = await page.$$(sel);
+      if (commentAreas.length > 0) break;
+    }
+    console.log(`Found ${commentAreas.length} comment areas`);
+
+    for (let i = 0; i < commentAreas.length && commented < NUM_COMMENTS; i++) {
+      try {
+        await commentAreas[i].click();
+        await page.waitForTimeout(500);
+        await page.keyboard.type(getRandomComment());
+        await page.keyboard.press('Enter');
+        commented++;
+        console.log(`Commented on post ${commented}`);
+        await page.waitForTimeout(1500);
+      } catch (err) {
+        console.error(`Error commenting on post ${i + 1}:`, err.message);
+      }
+    }
 
     console.log('Automation finished.');
   } catch (err) {
