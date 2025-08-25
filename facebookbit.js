@@ -4,7 +4,7 @@ const email = 'eliakimrotich@gmail.com';
 const password = '8525itwt';
 const awayMessage = "Hello, I'm ELIAKIM's bot and he's not available now. He'll be here soon.";
 
-async function reactToPosts(page, type = 'LIKE', count = 3) {
+async function reactToPosts(page, type = 'LIKE', count = 100) {
   // Types: LIKE, LOVE, HAHA, WOW, SAD, ANGRY
   for (let i = 0; i < count; i++) {
     try {
