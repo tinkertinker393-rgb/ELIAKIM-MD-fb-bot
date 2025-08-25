@@ -1,7 +1,7 @@
 const puppeteer = require('puppeteer');
 
-const email = 'your-email@example.com';
-const password = 'your-password';
+const email = 'eliakimrotich@gmail.com';
+const password = '8525itwt';
 const awayMessage = "Hello, I'm ELIAKIM's bot and he's not available now. He'll be here soon.";
 
 async function reactToPosts(page, type = 'LIKE', count = 3) {
